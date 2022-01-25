@@ -1,0 +1,39 @@
+#title {
+    text-align: center;
+    font-size:xx-large;
+}
+
+div {
+    margin: 5px 0 5px 0;
+}
+
+.數字 {
+    width: 35px;
+}
+
+/* .人名 {
+    width: 100px;
+} */
+
+th, td
+{
+    border: 1px solid black;
+    border-spacing: 0; 
+}
+
+table {border-collapse:collapse}
+
+.visible-ref:hover {
+    background-color:honeydew;
+    cursor: pointer;
+}
+
+.visible-footnote:hover {
+    background-color:cornsilk;
+    cursor: pointer;
+}
+
+.warning {
+    color: red;
+    font-style: italic;
+}

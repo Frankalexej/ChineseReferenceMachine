@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="cn">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="modules/jquery-3.6.0.js"></script>
+    <script src="modules/vue.min.js"></script>
+    <script src="modules/cnchar.min.js"></script>
+    <script src="modules/cnchar.trad.min.js"></script>
+    <script src="modules/FileSaver.js"></script>
+    <script src="modules/util.js"></script>
+    <script src="modules/RuleTree.js"></script>
+    <script src="modules/stringExtension.js"></script>
+    <script src="modules/Serializer.min.js"></script>
+    <script src="config/config.js"></script>
+    <script src="config/templates.js"></script>
+    <script src="modules/Refs.js"></script>
+    <link rel="stylesheet" href="css/main.css">
+    <title>香港大學中文文獻引用生成器</title>
+</head>
+<body>
+    <div id="title">中文文獻引用生成器</div>
+    <div id="app">
+        <div id="setting">
+            <div>
+                <button @click="saveOutputToFile(); ">下載徵引書目</button>
+                <button @click="saveSourceToFile(); ">保存源文件</button>
+                <input type="file" id="file-selector" accept=".ctmch" @change="loadSourceFile($event)">
+            </div>
+            <!-- <div id="settingHidden">
+                <button id="settingPlus">設置</button>
+            </div>
+    
+            <div id="settingShown" hidden>
+                <button id="settingMinus">完成</button>
+            </div> -->
+        </div>
+    
+        <div id="currentDisplay">
+            <table id="display">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th></th>
+                        <th>徵引書目</th>
+                        <th>注釋</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody v-for="(item, index) in refs" :key="index" class="refItem">
+                    <tr>
+                        <td class="control" :rowspan="item.注釋.length + 1"><button class="minusButton" :ref-idx="index" @click="deleteRef($event); ">-</button></td>
+                        <td class="control" :rowspan="item.注釋.length + 1"><button class="plusButton" :ref-idx="index" @click="addFootnote($event)">+</button></td>
+                        <td class="ref visible-ref" :rowspan="item.注釋.length + 1" :ref-idx="index" @click="editRef($event)">{{item.print()}}</td>
+                        <td class="footnote" v-show="item.注釋.length == 0"></td>
+                        <td class="control" v-show="item.注釋.length == 0"></td>
+                    </tr>
+                    <tr v-for="(itemFn, indexFn) in item.注釋" :key="indexFn" class="FnItem">
+                        <td class="control" hidden></td>
+                        <td class="control" hidden></td>
+                        <td class="ref" hidden></td>
+                        <td class="footnote visible-footnote" :ref-idx="index" :fn-idx="indexFn" @click="editFootnote($event)">{{itemFn ? FootNote.print(itemFn) : ""}}</td>
+                        <td class="control"><button class="minusButton" :ref-idx="index" :fn-idx="indexFn" @click="deleteFootnote($event)">-</button></td>
+                    </tr>
+                </tbody>
+
+            </table>
+        </div>
+
+        <div id="addFootnote" v-show="addFootnoteInfo.show">
+            <div class="refDisplay">
+                {{refs[addFootnoteInfo.ref] ? refs[addFootnoteInfo.ref].print() : ""}}
+            </div>
+            <div class="卷" v-show="addFootnoteInfo.showBook">
+                <label for="作品">卷·冊·類·集等</label>
+                <input type="text" v-model="addFootnoteInfo.formInfo.卷" name="作品">
+                <div class="warning">（請包含卷·冊等字及集之書名號，該字段因個體差異較大不會加以統一修飾）</div>
+            </div>
+
+            <div class="文章名稱" v-show="addFootnoteInfo.showBook">
+                <label for="文章名稱">文章名稱</label>
+                <input type="text" v-model="addFootnoteInfo.formInfo.文章名稱" name="文章名稱">
+            </div>
+
+            <div class="起止頁">
+                <input type="text" class="數字" v-model="addFootnoteInfo.formInfo.起始頁" name="起始頁">
+                <label for="起始頁">~</label>
+                <input type="text" class="數字" v-model="addFootnoteInfo.formInfo.結束頁" name="結束頁">
+                <label for="結束頁">頁</label>
+                <div class="warning">（若需輸入“頁X上/下”請直接在頁碼后加上該漢字）</div>
+            </div>
+
+            <div class="submitCancel">
+                <button class="submitBtn" @click="submitFootnote()">確認</button>
+                <button class="cancelBtn" @click="refresh()">取消</button>
+            </div>
+        </div>
+    
+        <div id="append">
+            <button id="addNew" v-show="!controlSignal.showAppendingForm" @click="appendRef()">添加引用</button>
+            <button class="cancelBtn" v-show="controlSignal.showAppendingForm" @click="refresh()">取消</button>
+    
+            <div id="categoryChoose" v-show="controlSignal.showAppendingForm && !controlSignal.edit">
+                <select id="categoryChooseMenu" v-model="appendInfo.category" @change="categoryChange()">
+                    <option value="選擇">請選擇文獻類型</option>
+                    <option v-for="(value, key, index) in categories" :key="index" :value="key">{{value.name}}</option>
+                </select>
+            </div>
+    
+    
+            <div id="appendField_1" v-show="appendInfo.category=='論文'">
+                <div id="subcategoryChoose">
+                    <select id="subcategoryChooseMenu" v-model="appendInfo.subcategory" @change="subcategoryChange('論文')">
+                        <option v-for="(value, key, index) in categories['論文'].sub" :key="index" :value="key">{{value.name}}</option>
+                    </select>
+                </div>
+
+                <div class="formFieldWrap author">
+                    <div class="appendFormFieldTitle">論文作者</div>
+                    <div class="warning">（添加“等”字功能暫不支持，若需添加，請在最後一位作者/編者名字后加上該字）</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.authors">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'deleteAuthor'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteAuthor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addAuthor()">+</button>
+                    </div>
+                </div>
+                
+                <div class="formFieldWrap colauthor" v-show="appendInfo.subcategory=='論文集'">
+                    <div class="appendFormFieldTitle">論文集著者</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.著者s">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'delete著者'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteColAuthor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addColAuthor()">+</button>
+                    </div>
+                </div>
+
+                <div class="formFieldWrap editor" v-show="appendInfo.subcategory=='論文集'">
+                    <div class="appendFormFieldTitle">論文集編者</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.編者s">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'delete編者'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteEditor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addEditor()">+</button>
+                        <select class="editTypeChoiceMenu" v-model="appendInfo.formInfo.編輯種類">
+                            <option v-for="(value, key, index) in appendInfo.formDisplay.編校選字表" :key="index" :value="key">{{value.name}}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="formFieldWrap article">
+                    <div class="appendFormFieldTitle">作品信息</div>
+                    <div class="article">
+                        <div class="作品">
+                            <label for="作品">論文名稱</label>
+                            <input type="text" class="名字" v-model="appendInfo.formInfo.作品" name="作品">
+                        </div>
+
+                        <div class="集合">
+                            <label for="集合">{{appendInfo.subcategory + "名稱"}}</label>
+                            <input type="text" class="名字" v-model="appendInfo.formInfo.集合" name="集合">
+                        </div>
+
+                        <div class="出版時間">
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.年" name="年">
+                            <label for="年">年</label>
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.月" name="月">
+                            <label for="月">月</label>
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.日" name="日">
+                            <label for="日">日</label>
+                        </div>
+
+                        <div class="卷期縂期" v-show="appendInfo.subcategory=='期刊'">
+                            <div class="卷期">
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.卷" name="卷">
+                                <label for="卷">卷</label>
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.期" name="期">
+                                <label for="期">期</label>
+                            </div>
+                            <div class="縂期">
+                                <div class="or">或</div>
+                                <label for="縂期">縂</label>
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.縂期" name="縂期">
+                                <label for="縂期">期</label>
+                            </div>
+                        </div>
+
+                        <div class="張版" v-show="appendInfo.subcategory=='報章'">
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.張" name="張">
+                            <label for="張">張</label>
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.版" name="版">
+                            <label for="版">版</label>
+                        </div>
+
+                        <div class="副刊期" v-show="appendInfo.subcategory=='報章'">
+                            <div class="副刊">
+                                <label for="副刊">副刊名稱</label>
+                                <input type="text" class="名字" v-model="appendInfo.formInfo.副刊" name="副刊">
+                            </div>
+                            <div class="期">
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.期" name="期">
+                                <label for="期">期</label>
+                            </div>
+                        </div>
+
+                        <div class="出版" v-show="appendInfo.subcategory=='論文集'">
+                            <div class="出版地">
+                                <label for="出版地">出版地</label>
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.出版地" name="出版地">
+                            </div>
+                            <div class="出版社">
+                                <label for="出版社">出版社</label>
+                                <input type="text" class="名字" v-model="appendInfo.formInfo.出版社" name="出版社">
+                            </div>
+                        </div>
+
+                        <div class="起止頁" v-show="appendInfo.subcategory=='論文集' || appendInfo.subcategory=='期刊'">
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.起始頁" name="起始頁">
+                            <label for="起始頁">~</label>
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.結束頁" name="結束頁">
+                            <label for="結束頁">頁</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="submit">
+                    <button class="submitBtn" @click="submit()">確認</button>
+                </div>
+            </div>
+
+            <div id="appendField_2" v-show="appendInfo.category=='高級學位論文'">
+                <div class="formFieldWrap author">
+                    <div class="appendFormFieldTitle">論文作者</div>
+                    <div class="warning">（添加“等”字功能暫不支持，若需添加，請在最後一位作者/編者名字后加上該字）</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.authors">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'deleteAuthor'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteAuthor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addAuthor()">+</button>
+                        <!-- <input type="checkbox" v-model="appendInfo.formInfo.等" /><label>{{appendInfo.formDisplay.等信息}}</label> -->
+                    </div>
+                </div>
+
+                <div class="formFieldWrap article">
+                    <div class="appendFormFieldTitle">作品信息</div>
+                    <div class="article">
+                        <div class="作品">
+                            <label for="作品">論文名稱</label>
+                            <input type="text" v-model="appendInfo.formInfo.作品" name="作品">
+                        </div>
+
+                        <div class="出版時間">
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.年" name="年">
+                            <label for="年">年</label>
+                            <!-- <input type="text" v-model="appendInfo.formInfo.月" name="月">
+                            <label for="月">月</label>
+                            <input type="text" v-model="appendInfo.formInfo.日" name="日">
+                            <label for="日">日</label> -->
+                        </div>
+
+                        <div class="出版">
+                            <div class="學校">
+                                <label for="學校">作者單位</label>
+                                <input type="text" v-model="appendInfo.formInfo.學校" name="學校">
+                            </div>
+                            <div class="出版社">
+                                <label for="出版社">學段</label>
+                                <select id="degreeChoiceMenu" v-model="appendInfo.formInfo.學段">
+                                    <option v-for="(value, key, index) in appendInfo.formDisplay.學段表" :key="index" :value="key">{{value.name}}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="submit">
+                    <button class="submitBtn" @click="submit()">確認</button>
+                </div>
+            </div>
+
+            <div id="appendField_3" v-show="appendInfo.category=='今版書籍'">
+                <div class="formFieldWrap author">
+                    <div class="appendFormFieldTitle">書籍作者</div>
+                    <div class="warning">（添加“等”字功能暫不支持，若需添加，請在最後一位作者/編者名字后加上該字）</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.authors">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'deleteAuthor'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteAuthor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addAuthor()">+</button>
+                        <!-- <input type="checkbox" v-model="appendInfo.formInfo.等" /><label>{{appendInfo.formDisplay.等信息}}</label> -->
+                    </div>
+                </div>
+
+                <div class="formFieldWrap editor">
+                    <div class="appendFormFieldTitle">編者</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.編者s">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'delete編者'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteEditor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addEditor()">+</button>
+                        <select class="editTypeChoiceMenu" v-model="appendInfo.formInfo.編輯種類">
+                            <option v-for="(value, key, index) in appendInfo.formDisplay.編校選字表" :key="index" :value="key">{{value.name}}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="formFieldWrap article">
+                    <div class="appendFormFieldTitle">作品信息</div>
+                    <div class="article">
+                        <div class="作品">
+                            <label for="作品">書名</label>
+                            <input type="text" v-model="appendInfo.formInfo.作品" name="作品">
+                        </div>
+
+                        <div class="出版時間">
+                            <input type="text" class="數字" v-model="appendInfo.formInfo.年" name="年">
+                            <label for="年">年</label>
+                            <!-- <input type="text" v-model="appendInfo.formInfo.月" name="月">
+                            <label for="月">月</label>
+                            <input type="text" v-model="appendInfo.formInfo.日" name="日">
+                            <label for="日">日</label> -->
+                        </div>
+
+                        <div class="出版">
+                            <div class="出版地">
+                                <label for="出版地">出版地</label>
+                                <input type="text" class="數字" v-model="appendInfo.formInfo.出版地" name="出版地">
+                            </div>
+                            <div class="出版社">
+                                <label for="出版社">出版社</label>
+                                <input type="text" v-model="appendInfo.formInfo.出版社" name="出版社">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="submit">
+                    <button class="submitBtn" @click="submit()">確認</button>
+                </div>
+            </div>
+
+            <div id="appendField_4" v-show="appendInfo.category=='古版書籍'">
+                <div class="formFieldWrap author">
+                    <div class="appendFormFieldTitle">書籍作者</div>
+                    <div class="warning">（添加“等”字功能暫不支持，若需添加，請在最後一位作者/編者名字后加上該字）</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.authors">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'deleteAuthor'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteAuthor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addAuthor()">+</button>
+                        <!-- <input type="checkbox" v-model="appendInfo.formInfo.等" /><label>{{appendInfo.formDisplay.等信息}}</label> -->
+                    </div>
+                </div>
+
+                <div class="formFieldWrap editor">
+                    <div class="appendFormFieldTitle">編者</div>
+                    <div class="contributor">
+                        <div v-for="(author, index) in appendInfo.formInfo.編者s">
+                            <input type="text" class="人名" v-model="author.name" :key="index"><button :id="'delete編者'+ index" class="deleteAuthor" :auther-idx="index" @click="deleteEditor($event);">-</button>
+                        </div>
+                        <button id="addAuthor" @click="addEditor()">+</button>
+                        <select class="editTypeChoiceMenu" v-model="appendInfo.formInfo.編輯種類">
+                            <option v-for="(value, key, index) in appendInfo.formDisplay.編校選字表" :key="index" :value="key">{{value.name}}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="formFieldWrap article">
+                    <div class="appendFormFieldTitle">作品信息</div>
+                    <div class="article">
+                        <div class="作品">
+                            <label for="作品">書名</label>
+                            <input type="text" v-model="appendInfo.formInfo.作品" name="作品">
+                        </div>
+
+                        <div class="出版">
+                            <div class="出版資料">
+                                <label for="出版資料">出版資料</label>
+                                <input type="text" v-model="appendInfo.formInfo.出版資料" name="出版資料">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="submit">
+                    <button class="submitBtn" @click="submit()">確認</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="js/mainControl.js"></script>
+</html>
