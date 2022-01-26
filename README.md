@@ -7,9 +7,12 @@
 
 ## 使用準備
 點擊此頁面右上角綠色Code按鈕，再點擊Download ZIP即可下載。
-![image] ()
 
-生成器目前是全離綫的，下載后可斷網使用。
+![image](示例圖片/下載1.jpg)
+
+![image](示例圖片/下載2.jpg)
+
+下載后解壓到任意路徑，打開“中文文獻引用生成器.html”文件即可使用。生成器是一個目前是全離綫的，下載后可斷網使用。
 
 Instructor: [Prof. Taku Komura](https://www.cs.hku.hk/index.php/people/academic-staff/taku)
 
